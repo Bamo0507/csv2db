@@ -22,14 +22,8 @@ LIMIT 5;
 
 -- Cuantas cartas tienen un precio de mercado en holofoil mayor a 100?
 SELECT
-c.Nombre AS cartas_mas_100,
-c.Pokedex_numb AS pokedex,
-c.Set_name AS set_name,
-c.Rarity AS rarity,
-p.Avg_Foil AS precio_foil,
-p.TCG_Price_Date AS fecha
+COUNT(p.Avg_Foil) AS cartas_mayor_100
 FROM Precios_Cartas AS p
-JOIN Cartas AS c ON p.Carta_id = c.Id
 -- Jalar las cartas mas recientes 
 JOIN (
     SELECT
@@ -38,8 +32,8 @@ JOIN (
     FROM Precios_Cartas AS p
     GROUP BY p.Carta_id
 ) AS latest ON p.Carta_id = latest.Carta_id AND p.TCG_Price_Date = latest.max_date
-WHERE p.Avg_Foil > 100
-ORDER BY precio_foil DESC;
+WHERE p.Avg_Foil > 100;
+
 
 -- Cual es el precio promedio de una carta en holofoil en la ultima actualizacion?
 SELECT
@@ -68,7 +62,7 @@ ON p_feb.Carta_id = p_mar.Carta_id
 AND EXTRACT(YEAR FROM p_feb.TCG_Price_Date) = EXTRACT(YEAR FROM p_mar.TCG_Price_Date)
 AND EXTRACT(MONTH FROM p_feb.TCG_Price_Date) = 2
 AND EXTRACT(MONTH FROM p_mar.TCG_Price_Date) = 3
-JOIN Cartas AS c ON p_feb.Carta_id = c.Id
+JOIN Cartas AS c ON p_feb.Carta_id = c.Id AND p_mar.Carta_id = c.Id
 WHERE p_feb.Avg_Foil > p_mar.Avg_Foil 
 AND p_feb.Avg_Foil IS NOT NULL 
 AND p_mar.Avg_Foil IS NOT NULL
@@ -89,8 +83,8 @@ ON p_feb.Carta_id = p_mar.Carta_id
 AND EXTRACT(YEAR FROM p_feb.TCG_Price_Date) = EXTRACT(YEAR FROM p_mar.TCG_Price_Date)
 AND EXTRACT(MONTH FROM p_feb.TCG_Price_Date) = 2
 AND EXTRACT(MONTH FROM p_mar.TCG_Price_Date) = 3
-JOIN Cartas AS c ON p_feb.Carta_id = c.Id
-WHERE p_feb.Avg_Normal > p_mar.Avg_Normal 
+JOIN Cartas AS c ON p_feb.Carta_id = c.Id AND p_mar.Carta_id = c.Id
+WHERE p_feb.Avg_Normal > p_mar.Avg_Normal
 AND p_feb.Avg_Normal IS NOT NULL 
 AND p_mar.Avg_Normal IS NOT NULL
 
@@ -110,7 +104,7 @@ ON p_feb.Carta_id = p_mar.Carta_id
 AND EXTRACT(YEAR FROM p_feb.TCG_Price_Date) = EXTRACT(YEAR FROM p_mar.TCG_Price_Date)
 AND EXTRACT(MONTH FROM p_feb.TCG_Price_Date) = 2
 AND EXTRACT(MONTH FROM p_mar.TCG_Price_Date) = 3
-JOIN Cartas AS c ON p_feb.Carta_id = c.Id
+JOIN Cartas AS c ON p_feb.Carta_id = c.Id AND p_mar.Carta_id = c.Id
 WHERE p_feb.Avg_Reverse > p_mar.Avg_Reverse 
 AND p_feb.Avg_Reverse IS NOT NULL 
 AND p_mar.Avg_Reverse IS NOT NULL
@@ -123,6 +117,7 @@ e.Types AS tipo_pokemon,
 AVG(p.Avg_Foil) AS precio_promedio_holofoil
 FROM Estadistica_Cartas AS e
 JOIN Precios_Cartas AS p ON e.Carta_id = p.Carta_id
+-- Sobre los resultados mas recientes para que sea sobre actualidad 
 JOIN (
     SELECT
     p.Carta_id,
@@ -132,12 +127,14 @@ JOIN (
 ) AS latest ON p.Carta_id = latest.Carta_id AND p.TCG_Price_Date = latest.max_date
 WHERE p.Avg_Foil IS NOT NULL
 GROUP BY e.Types
-HAVING e.Types IS NOT NULL; -- Devolvio un type [null] por lo que se agrego el HAVING
+HAVING e.Types IS NOT NULL -- Devolvio un type [null] por lo que se agrego el HAVING
+ORDER BY precio_promedio_holofoil DESC
+LIMIT 1; 
 
 -- Cual es la diferencia de precio entre la carta mas cara, y la mas barata en holofoil?
 WITH latest AS (
   SELECT p.*
-  FROM Precios_Cartas p
+  FROM Precios_Cartas AS p
   JOIN (
     SELECT Carta_id, 
     MAX(TCG_Price_Date) AS max_date
@@ -162,9 +159,11 @@ SELECT
   max_price.Avg_Foil AS precio_cara,
   min_price.Avg_Foil AS precio_barata,
   max_price.Avg_Foil - min_price.Avg_Foil AS diferencia
-FROM
-(max_price JOIN Cartas AS c_max ON max_price.Carta_id = c_max.Id),
-(min_price JOIN Cartas AS c_min ON min_price.Carta_id = c_min.Id);
+FROM 
+max_price
+JOIN Cartas AS c_max ON max_price.Carta_id = c_max.Id
+CROSS JOIN min_price
+JOIN Cartas AS c_min ON min_price.Carta_id = c_min.Id;
 
 -- Cuantas cartas tienen precios disponibles en todas las condiciones (normal, reverse, holofoil)?
 SELECT
@@ -205,8 +204,8 @@ LIMIT 3;
 
 -- Cual es la carta mas cara de cada tipo de Pokemon?
 SELECT DISTINCT ON (e.Types)
-c.Nombre AS carta_mas_cara,
 e.Types AS tipo_pokemon,
+c.Nombre AS carta_mas_cara,
 v.tipo AS tipo_carta,
 v.precio AS precio
 FROM Precios_Cartas p
@@ -226,7 +225,6 @@ JOIN (
     FROM Precios_Cartas AS p
     GROUP BY p.Carta_id
 ) AS latest ON p.Carta_id = latest.Carta_id AND p.TCG_Price_Date = latest.max_date
-WHERE p.TCG_Price_DATE = (SELECT MAX(TCG_Price_DATE) FROM Precios_Cartas)
 AND v.precio IS NOT NULL
 AND e.Types IS NOT NULL
 ORDER BY e.Types, v.precio DESC;
